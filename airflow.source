@@ -1262,7 +1262,10 @@ function Airflow:NewInput(frame : Frame , Callback : () -> ()) : TextButton
 	Button.TextTransparency = 1;
 
 	if Callback then
-		Button.MouseButton1Click:Connect(Callback);
+		Button.MouseButton1Click:Connect(function()
+			if Airflow.PlayClick then Airflow:PlayClick() end
+			Callback();
+		end);
 	end;
 
 	return Button;
@@ -1273,6 +1276,7 @@ function Airflow:Hover(element : Frame)
 	local Hover = Color3.fromRGB(144, 144, 144);
 
 	element.MouseEnter:Connect(function()
+		if Airflow.PlayHover then Airflow:PlayHover() end
 		Airflow:CreateAnimation(element,0.35,nil,{
 			BackgroundColor3 = Hover
 		})
@@ -6227,5 +6231,762 @@ function Airflow:DrawLoader(loader_config : Loader)
 	
 	return promis;
 end;
+
+-- =================================================================
+--  ZOLAR ADDONS FOR AIRFLOW - MODULO 1
+--  Detecção + Sons + Loader Fatality-style
+-- =================================================================
+
+local ZolarMarketplaceService = game:GetService("MarketplaceService")
+local ZolarContentProvider = game:GetService("ContentProvider")
+local ZolarSoundService = game:GetService("SoundService")
+local ZolarLighting = game:GetService("Lighting")
+local ZolarHttpService = game:GetService("HttpService")
+local ZolarLocalPlayer = Players.LocalPlayer
+
+-- ============================================================
+-- DETECÇÃO
+-- ============================================================
+local ZolarGameInfo = nil
+pcall(function()
+    ZolarGameInfo = ZolarMarketplaceService:GetProductInfo(game.PlaceId)
+end)
+
+local ZolarGameName = (ZolarGameInfo and ZolarGameInfo.Name) or "Unknown Game"
+local ZolarGameCreator = (ZolarGameInfo and ZolarGameInfo.Creator and ZolarGameInfo.Creator.Name) or "Unknown"
+
+local function ZolarDetectExecutor()
+    local name, ver = "Unknown Executor", ""
+    if identifyexecutor then
+        local ok, n, v = pcall(identifyexecutor)
+        if ok then name = tostring(n or "Unknown"); ver = tostring(v or "") end
+    elseif getexecutorname then
+        local ok, n = pcall(getexecutorname)
+        if ok and n then name = tostring(n) end
+    elseif KRNL_LOADED then name = "Krnl"
+    elseif syn then name = "Synapse" end
+    if #ver > 0 and ver ~= "Unknown" and ver ~= "" then
+        return name .. " v" .. ver
+    end
+    return name
+end
+
+local ZolarExecutorName = ZolarDetectExecutor()
+
+local function ZolarGetGameThumb()
+    local url = nil
+    pcall(function()
+        local body = game:HttpGet("https://thumbnails.roblox.com/v1/games/icons?universeIds=" .. tostring(game.GameId) .. "&size=512x512&format=Png")
+        local data = ZolarHttpService:JSONDecode(body)
+        if data and data.data and data.data[1] and data.data[1].state == "Completed" then
+            url = data.data[1].imageUrl
+        end
+    end)
+    return url
+end
+
+local ZolarGameThumb = ZolarGetGameThumb()
+
+print("[Zolar] Game:", ZolarGameName, "by", ZolarGameCreator)
+print("[Zolar] Executor:", ZolarExecutorName)
+
+-- ============================================================
+-- SONS
+-- ============================================================
+local ZolarClickSound = "rbxassetid://139719503904449"
+local ZolarFallbackSound = "rbxasset://sounds/electronicpingshort.wav"
+local ZolarSoundCache = {}
+
+pcall(function() ZolarSoundService.RespectFilteringEnabled = false end)
+
+local function ZolarPlaySound(id, pitch, volume)
+    pitch = pitch or 1
+    volume = volume or 1.0
+    local ok = pcall(function()
+        local s = ZolarSoundCache[id]
+        if not s or not s.Parent then
+            s = Instance.new("Sound")
+            s.SoundId = id
+            s.Parent = ZolarSoundService
+            ZolarSoundCache[id] = s
+        end
+        s.Volume = volume
+        s.PlaybackSpeed = pitch
+        s.TimePosition = 0
+        s:Play()
+    end)
+    if not ok then
+        pcall(function()
+            local s = ZolarSoundCache[ZolarFallbackSound]
+            if not s or not s.Parent then
+                s = Instance.new("Sound")
+                s.SoundId = ZolarFallbackSound
+                s.Parent = ZolarSoundService
+                ZolarSoundCache[ZolarFallbackSound] = s
+            end
+            s.Volume = volume
+            s.PlaybackSpeed = pitch
+            s:Play()
+        end)
+    end
+end
+
+function Airflow:PlayClick() ZolarPlaySound(ZolarClickSound, 1, 1.0) end
+function Airflow:PlayHover() ZolarPlaySound(ZolarClickSound, 1.5, 0.4) end
+function Airflow:PlaySuccess() ZolarPlaySound(ZolarClickSound, 1.3, 1.0) end
+function Airflow:PlayError() ZolarPlaySound(ZolarClickSound, 0.7, 1.0) end
+
+-- ============================================================
+-- LOADER FATALITY-STYLE
+-- ============================================================
+function Airflow:ShowZolarLoader(done)
+    local LOGO = "rbxassetid://128056142918696"
+    local NAME = "ZOLAR"
+
+    local Blur = Instance.new("BlurEffect")
+    Blur.Size = 0
+    Blur.Parent = ZolarLighting
+
+    local Loader = Instance.new("ScreenGui")
+    Loader.Name = "ZolarLoader"
+    Loader.Parent = CoreGui
+    Loader.IgnoreGuiInset = true
+    Loader.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    Loader.DisplayOrder = 999999
+    Loader.ResetOnSpawn = false
+
+    local BlackFrame = Instance.new("Frame")
+    BlackFrame.Name = "BlackFrame"
+    BlackFrame.Parent = Loader
+    BlackFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    BlackFrame.BackgroundTransparency = 1
+    BlackFrame.BorderSizePixel = 0
+    BlackFrame.Size = UDim2.new(1, 0, 1, 0)
+
+    local Center = Instance.new("Frame")
+    Center.Name = "Center"
+    Center.Parent = Loader
+    Center.AnchorPoint = Vector2.new(0.5, 0.5)
+    Center.BackgroundTransparency = 1
+    Center.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Center.Size = UDim2.new(0, 500, 0, 400)
+
+    local LogoHolder = Instance.new("Frame")
+    LogoHolder.Name = "LogoHolder"
+    LogoHolder.Parent = Center
+    LogoHolder.AnchorPoint = Vector2.new(0.5, 0)
+    LogoHolder.BackgroundTransparency = 1
+    LogoHolder.Position = UDim2.new(0.5, 0, 0, 30)
+    LogoHolder.Size = UDim2.new(0, 120, 0, 120)
+
+    local Logo = Instance.new("ImageLabel")
+    Logo.Name = "Logo"
+    Logo.Parent = LogoHolder
+    Logo.BackgroundTransparency = 1
+    Logo.Size = UDim2.fromScale(1, 1)
+    Logo.Image = LOGO
+    Logo.ImageTransparency = 1
+    Logo.ScaleType = Enum.ScaleType.Fit
+
+    local Aura = Instance.new("ImageLabel")
+    Aura.Name = "Aura"
+    Aura.Parent = LogoHolder
+    Aura.AnchorPoint = Vector2.new(0.5, 0.5)
+    Aura.BackgroundTransparency = 1
+    Aura.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Aura.Size = UDim2.new(1, 80, 1, 80)
+    Aura.Image = "rbxassetid://1316045217"
+    Aura.ImageColor3 = Color3.fromRGB(155, 130, 255)
+    Aura.ImageTransparency = 1
+    Aura.ZIndex = 0
+
+    local Texts = Instance.new("Frame")
+    Texts.Name = "Texts"
+    Texts.Parent = Center
+    Texts.AnchorPoint = Vector2.new(0.5, 0)
+    Texts.BackgroundTransparency = 1
+    Texts.Position = UDim2.new(0.5, 0, 0, 180)
+    Texts.Size = UDim2.new(1, 0, 0, 80)
+
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.Parent = Texts
+    UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+    UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    UIListLayout.Padding = UDim.new(0, 10)
+
+    local BarTrack = Instance.new("Frame")
+    BarTrack.Name = "BarTrack"
+    BarTrack.Parent = Center
+    BarTrack.AnchorPoint = Vector2.new(0.5, 0)
+    BarTrack.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    BarTrack.BorderSizePixel = 0
+    BarTrack.Position = UDim2.new(0.5, 0, 0, 300)
+    BarTrack.Size = UDim2.new(0, 260, 0, 3)
+    Instance.new("UICorner", BarTrack).CornerRadius = UDim.new(1, 0)
+
+    local BarFill = Instance.new("Frame")
+    BarFill.Name = "BarFill"
+    BarFill.Parent = BarTrack
+    BarFill.BackgroundColor3 = Color3.fromRGB(155, 130, 255)
+    BarFill.BorderSizePixel = 0
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    Instance.new("UICorner", BarFill).CornerRadius = UDim.new(1, 0)
+
+    Airflow:CreateAnimation(BlackFrame, 0.5, nil, { BackgroundTransparency = 0.7 })
+    Airflow:CreateAnimation(Blur, 1, nil, { Size = 40 })
+
+    task.wait(0.5)
+
+    Airflow:CreateAnimation(Aura, 0.5, nil, { ImageTransparency = 0.5 })
+
+    Logo.Size = UDim2.fromScale(0.3, 0.3)
+    Airflow:CreateAnimation(Logo, 0.6, Enum.EasingStyle.Back, {
+        ImageTransparency = 0, Size = UDim2.fromScale(1, 1)
+    })
+
+    task.spawn(function()
+        while Aura.Parent do
+            Airflow:CreateAnimation(Aura, 1.5, Enum.EasingStyle.Sine, { ImageTransparency = 0.75 })
+            task.wait(1.5)
+            Airflow:CreateAnimation(Aura, 1.5, Enum.EasingStyle.Sine, { ImageTransparency = 0.4 })
+            task.wait(1.5)
+        end
+    end)
+
+    task.wait(0.6)
+
+    local letters = {}
+    for i = 1, #NAME do
+        local letter = NAME:sub(i, i)
+        local Letter = Instance.new("TextLabel")
+        Letter.Name = "Letter_" .. i
+        Letter.Parent = Texts
+        Letter.BackgroundTransparency = 1
+        Letter.Font = Enum.Font.GothamBlack
+        Letter.Text = letter
+        Letter.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Letter.TextSize = 48
+        Letter.TextTransparency = 1
+        Letter.Size = UDim2.new(0, 40, 1, 0)
+        Letter.TextXAlignment = Enum.TextXAlignment.Center
+
+        local Grad = Instance.new("UIGradient", Letter)
+        Grad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 180, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 90, 220)),
+        })
+        Grad.Rotation = 90
+
+        table.insert(letters, Letter)
+    end
+
+    for i, Letter in ipairs(letters) do
+        task.delay((i - 1) * 0.08, function()
+            Letter.Position = UDim2.new(Letter.Position.X.Scale, Letter.Position.X.Offset, 0, 20)
+            Airflow:CreateAnimation(Letter, 0.5, Enum.EasingStyle.Back, {
+                TextTransparency = 0,
+                Position = UDim2.new(Letter.Position.X.Scale, Letter.Position.X.Offset, 0, 0)
+            })
+        end)
+    end
+
+    task.wait(#letters * 0.08 + 0.5)
+
+    local Subtitle = Instance.new("TextLabel")
+    Subtitle.Name = "Subtitle"
+    Subtitle.Parent = Center
+    Subtitle.AnchorPoint = Vector2.new(0.5, 0)
+    Subtitle.BackgroundTransparency = 1
+    Subtitle.Position = UDim2.new(0.5, 0, 0, 250)
+    Subtitle.Size = UDim2.new(1, 0, 0, 20)
+    Subtitle.Font = Enum.Font.Gotham
+    Subtitle.Text = "loading"
+    Subtitle.TextColor3 = Color3.fromRGB(150, 150, 160)
+    Subtitle.TextSize = 12
+    Subtitle.TextTransparency = 1
+
+    Airflow:CreateAnimation(Subtitle, 0.4, nil, { TextTransparency = 0 })
+
+    local stages = {
+        { pct = 25, text = "initializing" },
+        { pct = 55, text = "detecting game" },
+        { pct = 80, text = "loading modules" },
+        { pct = 100, text = "ready" },
+    }
+
+    task.spawn(function()
+        local current = 0
+        for _, stage in ipairs(stages) do
+            local gap = (stage.pct - current) / 15
+            for i = 1, 15 do
+                current = current + gap
+                BarFill.Size = UDim2.new(current / 100, 0, 1, 0)
+                task.wait(0.04)
+            end
+            current = stage.pct
+            Subtitle.Text = stage.text
+            task.wait(0.2)
+        end
+    end)
+
+    task.wait(2.5)
+
+    Airflow:CreateAnimation(Blur, 1, nil, { Size = 0 })
+    Airflow:CreateAnimation(BlackFrame, 0.8, nil, { BackgroundTransparency = 1 })
+    Airflow:CreateAnimation(Logo, 0.6, nil, { ImageTransparency = 1 })
+    Airflow:CreateAnimation(Aura, 0.6, nil, { ImageTransparency = 1 })
+    Airflow:CreateAnimation(Subtitle, 0.5, nil, { TextTransparency = 1 })
+    Airflow:CreateAnimation(BarTrack, 0.5, nil, { BackgroundTransparency = 1 })
+    Airflow:CreateAnimation(BarFill, 0.5, nil, { BackgroundTransparency = 1 })
+
+    for _, Letter in ipairs(letters) do
+        Airflow:CreateAnimation(Letter, 0.6, nil, { TextTransparency = 1 })
+    end
+
+    task.wait(1)
+
+    pcall(function() Loader:Destroy() end)
+    pcall(function() Blur:Destroy() end)
+
+    if done then done() end
+end
+-- =================================================================
+--  ZOLAR ADDONS FOR AIRFLOW - MODULO 2
+--  Sistema de Login
+-- =================================================================
+
+local ZolarAccFolder = "ZolarHub"
+local ZolarAccFile = ZolarAccFolder .. "/account.json"
+local ZolarSessionTime = 5 * 60 * 60
+
+pcall(function()
+    if isfolder and not isfolder(ZolarAccFolder) then makefolder(ZolarAccFolder) end
+end)
+
+local function ZolarSaveAcc(u, p)
+    if not writefile then return end
+    pcall(function()
+        writefile(ZolarAccFile, ZolarHttpService:JSONEncode({
+            user = u, pass = p, created = os.time(), lastLogin = os.time()
+        }))
+    end)
+end
+
+local function ZolarLoadAcc()
+    if not isfile or not readfile then return nil end
+    local exists = false
+    pcall(function() exists = isfile(ZolarAccFile) end)
+    if not exists then return nil end
+    local ok, raw = pcall(function() return readfile(ZolarAccFile) end)
+    if not ok or type(raw) ~= "string" or #raw < 5 then return nil end
+    local ok2, d = pcall(function() return ZolarHttpService:JSONDecode(raw) end)
+    if not ok2 or type(d) ~= "table" then return nil end
+    if type(d.user) ~= "string" or #d.user < 1 then return nil end
+    if type(d.pass) ~= "string" or #d.pass < 1 then return nil end
+    return d
+end
+
+function Airflow:ShowZolarLogin(onOk)
+    local acc = ZolarLoadAcc()
+    local isCreate = (acc == nil)
+    local ACCENT = Color3.fromRGB(155, 130, 255)
+    local ACCENT2 = Color3.fromRGB(200, 180, 255)
+    local TEXT = Color3.fromRGB(255, 255, 255)
+    local MUTED = Color3.fromRGB(130, 130, 145)
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "ZolarLogin"
+    sg.IgnoreGuiInset = true
+    sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder = 999998
+    sg.Parent = CoreGui
+
+    local backdrop = Instance.new("Frame", sg)
+    backdrop.Size = UDim2.fromScale(1, 1)
+    backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    backdrop.BackgroundTransparency = 1
+    backdrop.BorderSizePixel = 0
+    Airflow:CreateAnimation(backdrop, 0.5, nil, { BackgroundTransparency = 0.55 })
+
+    local cardW, cardH = 660, 420
+    local card = Instance.new("Frame", backdrop)
+    card.Size = UDim2.fromOffset(cardW - 40, cardH - 40)
+    card.Position = UDim2.new(0.5, 0, 0.5, 30)
+    card.AnchorPoint = Vector2.new(0.5, 0.5)
+    card.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+    card.BackgroundTransparency = 1
+    card.BorderSizePixel = 0
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
+
+    local stroke = Instance.new("UIStroke", card)
+    stroke.Color = Color3.fromRGB(38, 38, 42)
+    stroke.Thickness = 1
+    stroke.Transparency = 1
+
+    Airflow:CreateAnimation(card, 0.6, Enum.EasingStyle.Back, {
+        Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 0,
+        Size = UDim2.fromOffset(cardW, cardH)
+    })
+    Airflow:CreateAnimation(stroke, 0.6, nil, { Transparency = 0 })
+
+    local div = Instance.new("Frame", card)
+    div.Size = UDim2.new(0, 1, 1, -48)
+    div.Position = UDim2.new(0, 366, 0, 24)
+    div.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    div.BorderSizePixel = 0
+    div.BackgroundTransparency = 1
+    Airflow:CreateAnimation(div, 0.6, nil, { BackgroundTransparency = 0 })
+
+    local logoIcon = Instance.new("ImageLabel", card)
+    logoIcon.Size = UDim2.fromOffset(22, 22)
+    logoIcon.Position = UDim2.fromOffset(24, 22)
+    logoIcon.BackgroundTransparency = 1
+    logoIcon.Image = "rbxassetid://128056142918696"
+    logoIcon.ImageTransparency = 1
+    Airflow:CreateAnimation(logoIcon, 0.5, nil, { ImageTransparency = 0 })
+
+    local title = Instance.new("TextLabel", card)
+    title.Size = UDim2.fromOffset(200, 22)
+    title.Position = UDim2.fromOffset(56, 22)
+    title.BackgroundTransparency = 1
+    title.Text = "Zolar"
+    title.TextColor3 = TEXT
+    title.TextSize = 17
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextTransparency = 1
+    Airflow:CreateAnimation(title, 0.5, nil, { TextTransparency = 0 })
+
+    local subtitle = Instance.new("TextLabel", card)
+    subtitle.Size = UDim2.fromOffset(220, 14)
+    subtitle.Position = UDim2.fromOffset(56, 44)
+    subtitle.BackgroundTransparency = 1
+    subtitle.Text = "Account system"
+    subtitle.TextColor3 = MUTED
+    subtitle.TextSize = 11
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.TextXAlignment = Enum.TextXAlignment.Left
+    subtitle.TextTransparency = 1
+    Airflow:CreateAnimation(subtitle, 0.5, nil, { TextTransparency = 0 })
+
+    local formLabel = Instance.new("TextLabel", card)
+    formLabel.Size = UDim2.fromOffset(200, 14)
+    formLabel.Position = UDim2.fromOffset(24, 82)
+    formLabel.BackgroundTransparency = 1
+    formLabel.Text = "Account"
+    formLabel.TextColor3 = Color3.fromRGB(150, 150, 165)
+    formLabel.TextSize = 11
+    formLabel.Font = Enum.Font.Gotham
+    formLabel.TextXAlignment = Enum.TextXAlignment.Left
+    formLabel.TextTransparency = 1
+    Airflow:CreateAnimation(formLabel, 0.5, nil, { TextTransparency = 0 })
+
+    local function makeInput(placeholder, y)
+        local holder = Instance.new("Frame", card)
+        holder.Size = UDim2.fromOffset(318, 42)
+        holder.Position = UDim2.fromOffset(24, y)
+        holder.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
+        holder.BackgroundTransparency = 1
+        holder.BorderSizePixel = 0
+        Instance.new("UICorner", holder).CornerRadius = UDim.new(0, 8)
+
+        local hStroke = Instance.new("UIStroke", holder)
+        hStroke.Color = Color3.fromRGB(45, 45, 50)
+        hStroke.Thickness = 1
+        hStroke.Transparency = 1
+        Airflow:CreateAnimation(holder, 0.4, nil, { BackgroundTransparency = 0 })
+        Airflow:CreateAnimation(hStroke, 0.4, nil, { Transparency = 0 })
+
+        local box = Instance.new("TextBox", holder)
+        box.Size = UDim2.new(1, -24, 1, 0)
+        box.Position = UDim2.fromOffset(12, 0)
+        box.BackgroundTransparency = 1
+        box.Text = ""
+        box.PlaceholderText = placeholder
+        box.PlaceholderColor3 = Color3.fromRGB(90, 90, 100)
+        box.TextColor3 = TEXT
+        box.TextSize = 13
+        box.Font = Enum.Font.Gotham
+        box.TextXAlignment = Enum.TextXAlignment.Left
+        box.ClearTextOnFocus = false
+        box.TextTransparency = 1
+        Airflow:CreateAnimation(box, 0.4, nil, { TextTransparency = 0 })
+
+        box.Focused:Connect(function()
+            Airflow:PlayClick()
+            Airflow:CreateAnimation(hStroke, 0.15, nil, { Color = ACCENT })
+            Airflow:CreateAnimation(holder, 0.15, nil, { BackgroundColor3 = Color3.fromRGB(32, 30, 42) })
+        end)
+        box.FocusLost:Connect(function()
+            Airflow:CreateAnimation(hStroke, 0.15, nil, { Color = Color3.fromRGB(45, 45, 50) })
+            Airflow:CreateAnimation(holder, 0.15, nil, { BackgroundColor3 = Color3.fromRGB(28, 28, 33) })
+        end)
+
+        return holder, box
+    end
+
+    local userHolder, userBox = makeInput("Enter your username", 104)
+    local passHolder, passBox = makeInput("Enter your password", 154)
+    local confirmHolder, confirmBox = makeInput("Confirm your password", 204)
+
+    local err = Instance.new("TextLabel", card)
+    err.Size = UDim2.fromOffset(318, 14)
+    err.Position = UDim2.fromOffset(24, 254)
+    err.BackgroundTransparency = 1
+    err.Text = ""
+    err.TextColor3 = Color3.fromRGB(240, 100, 100)
+    err.TextSize = 11
+    err.Font = Enum.Font.Gotham
+    err.TextXAlignment = Enum.TextXAlignment.Left
+    err.TextTransparency = 1
+
+    local primary = Instance.new("TextButton", card)
+    primary.Size = UDim2.fromOffset(318, 44)
+    primary.Position = UDim2.fromOffset(24, 276)
+    primary.BackgroundColor3 = ACCENT
+    primary.BorderSizePixel = 0
+    primary.Text = ""
+    primary.AutoButtonColor = false
+    primary.BackgroundTransparency = 1
+    Instance.new("UICorner", primary).CornerRadius = UDim.new(0, 8)
+
+    local pGrad = Instance.new("UIGradient", primary)
+    pGrad.Color = ColorSequence.new(ACCENT, ACCENT2)
+    pGrad.Rotation = 45
+    Airflow:CreateAnimation(primary, 0.4, nil, { BackgroundTransparency = 0 })
+
+    local pLbl = Instance.new("TextLabel", primary)
+    pLbl.Size = UDim2.fromScale(1, 1)
+    pLbl.BackgroundTransparency = 1
+    pLbl.Text = isCreate and "Create account" or "Sign in"
+    pLbl.TextColor3 = Color3.fromRGB(15, 15, 20)
+    pLbl.TextSize = 13
+    pLbl.Font = Enum.Font.GothamBold
+    pLbl.TextTransparency = 1
+    Airflow:CreateAnimation(pLbl, 0.4, nil, { TextTransparency = 0 })
+
+    local toggleBtn = Instance.new("TextButton", card)
+    toggleBtn.Size = UDim2.fromOffset(318, 20)
+    toggleBtn.Position = UDim2.fromOffset(24, 328)
+    toggleBtn.BackgroundTransparency = 1
+    toggleBtn.Text = ""
+    toggleBtn.TextSize = 11
+    toggleBtn.Font = Enum.Font.Gotham
+    toggleBtn.TextTransparency = 1
+    Airflow:CreateAnimation(toggleBtn, 0.4, nil, { TextTransparency = 0 })
+
+    local tLabel = Instance.new("TextLabel", toggleBtn)
+    tLabel.Size = UDim2.fromScale(1, 1)
+    tLabel.BackgroundTransparency = 1
+    tLabel.TextColor3 = MUTED
+    tLabel.TextSize = 11
+    tLabel.Font = Enum.Font.Gotham
+    tLabel.TextXAlignment = Enum.TextXAlignment.Left
+    tLabel.TextTransparency = 1
+    Airflow:CreateAnimation(tLabel, 0.4, nil, { TextTransparency = 0 })
+
+    local gameLbl = Instance.new("TextLabel", card)
+    gameLbl.Size = UDim2.fromOffset(318, 16)
+    gameLbl.Position = UDim2.fromOffset(24, 356)
+    gameLbl.BackgroundTransparency = 1
+    gameLbl.Text = ZolarGameName
+    gameLbl.TextColor3 = TEXT
+    gameLbl.TextSize = 12
+    gameLbl.Font = Enum.Font.GothamMedium
+    gameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    gameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    gameLbl.TextTransparency = 1
+    Airflow:CreateAnimation(gameLbl, 0.4, nil, { TextTransparency = 0 })
+
+    local footer = Instance.new("TextLabel", card)
+    footer.Size = UDim2.fromOffset(318, 14)
+    footer.Position = UDim2.fromOffset(24, 380)
+    footer.BackgroundTransparency = 1
+    footer.Text = "Your account is saved locally, you only enter it once."
+    footer.TextColor3 = Color3.fromRGB(90, 90, 100)
+    footer.TextSize = 10
+    footer.Font = Enum.Font.Gotham
+    footer.TextXAlignment = Enum.TextXAlignment.Left
+    footer.TextTransparency = 1
+    Airflow:CreateAnimation(footer, 0.4, nil, { TextTransparency = 0 })
+
+    local rx = 390
+    local rw = 246
+
+    local rightLabel = Instance.new("TextLabel", card)
+    rightLabel.Size = UDim2.fromOffset(rw, 14)
+    rightLabel.Position = UDim2.fromOffset(rx, 22)
+    rightLabel.BackgroundTransparency = 1
+    rightLabel.Text = "Detected environment"
+    rightLabel.TextColor3 = Color3.fromRGB(150, 150, 165)
+    rightLabel.TextSize = 11
+    rightLabel.Font = Enum.Font.Gotham
+    rightLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rightLabel.TextTransparency = 1
+    Airflow:CreateAnimation(rightLabel, 0.5, nil, { TextTransparency = 0 })
+
+    local function makeInfo(y, titleTxt, subTxt)
+        local row = Instance.new("Frame", card)
+        row.Size = UDim2.fromOffset(rw, 46)
+        row.Position = UDim2.fromOffset(rx, y)
+        row.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel = 0
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+        local rStroke = Instance.new("UIStroke", row)
+        rStroke.Color = Color3.fromRGB(45, 45, 50)
+        rStroke.Thickness = 1
+        rStroke.Transparency = 1
+        Airflow:CreateAnimation(row, 0.4, nil, { BackgroundTransparency = 0 })
+        Airflow:CreateAnimation(rStroke, 0.4, nil, { Transparency = 0 })
+
+        local t = Instance.new("TextLabel", row)
+        t.Size = UDim2.fromOffset(rw - 24, 14)
+        t.Position = UDim2.fromOffset(12, 8)
+        t.BackgroundTransparency = 1
+        t.Text = titleTxt
+        t.TextColor3 = TEXT
+        t.TextSize = 11
+        t.Font = Enum.Font.GothamBold
+        t.TextXAlignment = Enum.TextXAlignment.Left
+        t.TextTransparency = 1
+        Airflow:CreateAnimation(t, 0.4, nil, { TextTransparency = 0 })
+
+        local s = Instance.new("TextLabel", row)
+        s.Size = UDim2.fromOffset(rw - 24, 14)
+        s.Position = UDim2.fromOffset(12, 24)
+        s.BackgroundTransparency = 1
+        s.Text = subTxt
+        s.TextColor3 = MUTED
+        s.TextSize = 10
+        s.Font = Enum.Font.Gotham
+        s.TextXAlignment = Enum.TextXAlignment.Left
+        s.TextTransparency = 1
+        Airflow:CreateAnimation(s, 0.4, nil, { TextTransparency = 0 })
+    end
+
+    makeInfo(44, "Game", ZolarGameName)
+    makeInfo(96, "Creator", ZolarGameCreator)
+    makeInfo(148, "Executor", ZolarExecutorName)
+
+    local function applyMode()
+        if isCreate then
+            confirmHolder.Visible = true
+            pLbl.Text = "Create account"
+            tLabel.Text = "Already have an account? Click here to sign in"
+        else
+            confirmHolder.Visible = false
+            pLbl.Text = "Sign in"
+            tLabel.Text = "No account yet? Click here to create one"
+        end
+        err.Text = ""
+    end
+    applyMode()
+
+    toggleBtn.MouseEnter:Connect(function()
+        Airflow:PlayHover()
+        Airflow:CreateAnimation(tLabel, 0.15, nil, { TextColor3 = ACCENT })
+    end)
+    toggleBtn.MouseLeave:Connect(function()
+        Airflow:CreateAnimation(tLabel, 0.15, nil, { TextColor3 = MUTED })
+    end)
+    toggleBtn.MouseButton1Click:Connect(function()
+        Airflow:PlayClick()
+        isCreate = not isCreate
+        applyMode()
+        Airflow:CreateAnimation(card, 0.1, nil, { Size = UDim2.fromOffset(cardW - 8, cardH - 8) })
+        task.delay(0.1, function()
+            Airflow:CreateAnimation(card, 0.15, Enum.EasingStyle.Back, { Size = UDim2.fromOffset(cardW, cardH) })
+        end)
+    end)
+
+    primary.MouseEnter:Connect(function()
+        Airflow:PlayHover()
+        Airflow:CreateAnimation(primary, 0.15, nil, { BackgroundColor3 = Color3.fromRGB(180, 160, 255) })
+    end)
+    primary.MouseLeave:Connect(function()
+        Airflow:CreateAnimation(primary, 0.15, nil, { BackgroundColor3 = ACCENT })
+    end)
+
+    local busy = false
+    primary.MouseButton1Click:Connect(function()
+        if busy then return end
+        Airflow:PlayClick()
+
+        local u, p = userBox.Text, passBox.Text
+
+        if #u < 3 then err.Text = "username must be at least 3 characters"; Airflow:PlayError(); return end
+        if #p < 3 then err.Text = "password must be at least 3 characters"; Airflow:PlayError(); return end
+
+        if isCreate then
+            if confirmBox.Text ~= p then err.Text = "passwords do not match"; Airflow:PlayError(); return end
+        else
+            local a = ZolarLoadAcc()
+            if not a then err.Text = "no account found, create one first"; Airflow:PlayError(); return end
+            if a.user ~= u or a.pass ~= p then err.Text = "incorrect username or password"; Airflow:PlayError(); return end
+        end
+
+        busy = true
+        err.Text = ""
+        pLbl.Text = "please wait..."
+
+        task.wait(0.9)
+
+        if isCreate then
+            ZolarSaveAcc(u, p)
+        else
+            local a = ZolarLoadAcc()
+            if a then
+                a.lastLogin = os.time()
+                pcall(function() writefile(ZolarAccFile, ZolarHttpService:JSONEncode(a)) end)
+            end
+        end
+
+        Airflow:PlaySuccess()
+        pLbl.Text = "connected"
+        pGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 200, 120)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 230, 160)),
+        })
+
+        task.wait(0.5)
+
+        for _, c in ipairs(card:GetDescendants()) do
+            if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
+                Airflow:CreateAnimation(c, 0.3, nil, { TextTransparency = 1 })
+            elseif c:IsA("ImageLabel") then
+                Airflow:CreateAnimation(c, 0.3, nil, { ImageTransparency = 1 })
+            elseif c:IsA("Frame") then
+                Airflow:CreateAnimation(c, 0.3, nil, { BackgroundTransparency = 1 })
+            elseif c:IsA("UIStroke") then
+                Airflow:CreateAnimation(c, 0.3, nil, { Transparency = 1 })
+            end
+        end
+        Airflow:CreateAnimation(card, 0.3, nil, { BackgroundTransparency = 1 })
+        Airflow:CreateAnimation(backdrop, 0.35, nil, { BackgroundTransparency = 1 })
+
+        task.wait(0.4)
+        pcall(function() sg:Destroy() end)
+        if onOk then onOk(u) end
+    end)
+end
+
+function Airflow:StartZolarTimer()
+    local t0 = os.time()
+    task.spawn(function()
+        while true do
+            task.wait(10)
+            if os.time() - t0 >= ZolarSessionTime then
+                pcall(function() Client:Kick("The login is expired") end)
+                break
+            end
+        end
+    end)
+end
+
 
 return Airflow;
